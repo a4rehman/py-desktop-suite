@@ -1,0 +1,4 @@
+customtkinter>=6.0.0
+pillow>=10.4.0
+requests>=2.34.0
+ttkbootstrap>=2.1.0
