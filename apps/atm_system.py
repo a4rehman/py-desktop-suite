@@ -2,6 +2,8 @@ import tkinter as tk
 from tkinter import messagebox
 import customtkinter as ctk
 
+from atm_core import AtmAccount
+
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
@@ -13,9 +15,7 @@ class ATMSystemApp(ctk.CTk):
         self.geometry("640x580")
         self.resizable(False, False)
 
-        self.__pin = "1234"  # Default initial PIN
-        self.__balance = 2500  # Default demo balance
-        self.transactions = []
+        self.account = AtmAccount()
 
         self._build_ui()
 
@@ -54,7 +54,7 @@ class ATMSystemApp(ctk.CTk):
 
         self.bal_display = ctk.CTkLabel(
             self.card_frame,
-            text=f"Available Balance: ${self.__balance:,.2f}",
+            text=f"Available Balance: ${self.account.balance:,.2f}",
             font=ctk.CTkFont(size=16, weight="bold"),
             text_color="#FFFFFF"
         )
@@ -115,56 +115,51 @@ class ATMSystemApp(ctk.CTk):
     def _verify_pin(self):
         dialog = ctk.CTkInputDialog(text="Enter your 4-digit Security PIN:", title="PIN Security Check")
         entered_pin = dialog.get_input()
-        if entered_pin == self.__pin:
+        if entered_pin is not None and self.account.verify_pin(entered_pin):
             return True
-        else:
-            messagebox.showerror("Access Denied", "Incorrect Security PIN entered!")
-            return False
+        messagebox.showerror("Access Denied", "Incorrect Security PIN entered!")
+        return False
 
     def change_pin(self):
         if not self._verify_pin():
             return
         dialog = ctk.CTkInputDialog(text="Enter New 4-digit Security PIN:", title="Update PIN")
         new_pin = dialog.get_input()
-        if new_pin and len(new_pin) == 4 and new_pin.isdigit():
-            self.__pin = new_pin
-            messagebox.showinfo("Success", "Security PIN successfully updated!")
+        if new_pin is None:
+            return
+        success, message = self.account.change_pin(new_pin)
+        if success:
+            messagebox.showinfo("Success", message)
         else:
-            messagebox.showerror("Error", "Invalid PIN format. PIN must be 4 digits.")
+            messagebox.showerror("Error", message)
 
     def deposit_cash(self):
         if not self._verify_pin():
             return
         dialog = ctk.CTkInputDialog(text="Enter Cash Deposit Amount ($):", title="Deposit Cash")
         raw = dialog.get_input()
-        try:
-            amt = float(raw)
-            if amt > 0:
-                self.__balance += amt
-                self.transactions.append(f"Deposit: +${amt:,.2f}")
-                self._update_card()
-                messagebox.showinfo("Transaction Complete", f"Successfully deposited ${amt:,.2f}!")
-            else:
-                messagebox.showerror("Error", "Deposit amount must be greater than $0.")
-        except (ValueError, TypeError):
-            pass
+        if raw is None:
+            return
+        success, message = self.account.deposit(raw)
+        if success:
+            self._update_card()
+            messagebox.showinfo("Transaction Complete", message)
+        else:
+            messagebox.showerror("Error", message)
 
     def withdraw_cash(self):
         if not self._verify_pin():
             return
         dialog = ctk.CTkInputDialog(text="Enter Withdrawal Amount ($):", title="Withdraw Cash")
         raw = dialog.get_input()
-        try:
-            amt = float(raw)
-            if 0 < amt <= self.__balance:
-                self.__balance -= amt
-                self.transactions.append(f"Withdrawal: -${amt:,.2f}")
-                self._update_card()
-                messagebox.showinfo("Transaction Complete", f"Successfully withdrawn ${amt:,.2f}!")
-            else:
-                messagebox.showerror("Error", "Insufficient balance or invalid amount.")
-        except (ValueError, TypeError):
-            pass
+        if raw is None:
+            return
+        success, message = self.account.withdraw(raw)
+        if success:
+            self._update_card()
+            messagebox.showinfo("Transaction Complete", message)
+        else:
+            messagebox.showerror("Error", message)
 
     def view_history(self):
         if not self._verify_pin():
@@ -179,15 +174,15 @@ class ATMSystemApp(ctk.CTk):
         textbox = ctk.CTkTextbox(log_window, font=ctk.CTkFont(size=13))
         textbox.pack(fill="both", expand=True, padx=15, pady=(0, 15))
 
-        if not self.transactions:
+        if not self.account.transactions:
             textbox.insert("1.0", "No recent transactions found.")
         else:
-            content = "\n".join([f"• {t}" for t in self.transactions])
-            textbox.insert("1.0", f"Account: •••• 8842\nTotal Balance: ${self.__balance:,.2f}\n\nRecent Activity:\n" + content)
+            content = "\n".join([f"• {t}" for t in self.account.transactions])
+            textbox.insert("1.0", f"Account: •••• 8842\nTotal Balance: ${self.account.balance:,.2f}\n\nRecent Activity:\n" + content)
         textbox.configure(state="disabled")
 
     def _update_card(self):
-        self.bal_display.configure(text=f"Available Balance: ${self.__balance:,.2f}")
+        self.bal_display.configure(text=f"Available Balance: ${self.account.balance:,.2f}")
 
 
 if __name__ == "__main__":

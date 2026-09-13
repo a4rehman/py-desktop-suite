@@ -1,5 +1,6 @@
-import math
 import customtkinter as ctk
+
+from calc_engine import evaluate, sqrt as solve_sqrt
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -132,33 +133,26 @@ class CalculatorApp(ctk.CTk):
         self._update_display()
 
     def on_sqrt(self):
-        try:
-            val = float(self.expression) if self.expression else 0
-            if val < 0:
-                self.display.configure(text="Error")
-                return
-            res = math.sqrt(val)
-            self.history = f"√({self.expression})"
-            self.expression = f"{res:.6g}"
-            self.history_label.configure(text=self.history)
-            self.display.configure(text=self.expression)
-        except Exception:
+        result = solve_sqrt(self.expression)
+        if result is None:
             self.display.configure(text="Error")
+            return
+        self.history = f"√({self.expression})"
+        self.expression = result
+        self.history_label.configure(text=self.history)
+        self.display.configure(text=self.expression)
 
     def on_equals(self):
         if not self.expression:
             return
-        try:
-            self.history = self.expression
-            safe_expr = self.expression.replace("×", "*").replace("÷", "/")
-            result = eval(safe_expr)
-            if isinstance(result, float) and result.is_integer():
-                result = int(result)
-            self.expression = str(result)
-            self.history_label.configure(text=f"{self.history} =")
-            self.display.configure(text=self.expression)
-        except Exception:
+        self.history = self.expression
+        result = evaluate(self.expression)
+        if result is None:
             self.display.configure(text="Error")
+            return
+        self.expression = result
+        self.history_label.configure(text=f"{self.history} =")
+        self.display.configure(text=self.expression)
 
     def _update_display(self):
         text = self.expression if self.expression else "0"

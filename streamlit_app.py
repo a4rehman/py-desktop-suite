@@ -1,8 +1,10 @@
 import streamlit as st
-import math
 import requests
 from PIL import Image
 from io import BytesIO
+
+from apps.atm_core import AtmAccount
+from apps.calc_engine import evaluate, sqrt
 
 # Page Configuration
 st.set_page_config(
@@ -62,14 +64,10 @@ st.markdown("""
 # Initialize Session State Variables
 if "calc_expr" not in st.session_state:
     st.session_state.calc_expr = ""
-if "atm_pin" not in st.session_state:
-    st.session_state.atm_pin = "1234"
-if "atm_balance" not in st.session_state:
-    st.session_state.atm_balance = 2500.0
+if "atm_account" not in st.session_state:
+    st.session_state.atm_account = AtmAccount()
 if "atm_authenticated" not in st.session_state:
     st.session_state.atm_authenticated = False
-if "atm_history" not in st.session_state:
-    st.session_state.atm_history = []
 if "cart" not in st.session_state:
     st.session_state.cart = []
 
@@ -191,11 +189,8 @@ elif choice == "🧮 Pro Calculator":
             append_calc("3")
             st.rerun()
         if st.button("√", use_container_width=True):
-            try:
-                val = float(eval(st.session_state.calc_expr))
-                st.session_state.calc_expr = str(math.sqrt(val))
-            except Exception:
-                st.session_state.calc_expr = "Error"
+            result = sqrt(st.session_state.calc_expr)
+            st.session_state.calc_expr = result if result is not None else "Error"
             st.rerun()
 
     with col4:
@@ -212,13 +207,8 @@ elif choice == "🧮 Pro Calculator":
             append_calc("+")
             st.rerun()
         if st.button("=", use_container_width=True, type="primary"):
-            try:
-                res = eval(st.session_state.calc_expr)
-                if isinstance(res, float) and res.is_integer():
-                    res = int(res)
-                st.session_state.calc_expr = str(res)
-            except Exception:
-                st.session_state.calc_expr = "Error"
+            result = evaluate(st.session_state.calc_expr)
+            st.session_state.calc_expr = result if result is not None else "Error"
             st.rerun()
 
 # ---------------------------------------------------------
@@ -269,11 +259,13 @@ elif choice == "📰 Global News Hub":
 elif choice == "🏧 ATM Terminal":
     st.title("🏧 Nexus Digital ATM Terminal")
 
+    account = st.session_state.atm_account
+
     st.markdown(f"""
     <div class="credit-card">
         <h3>PLATINUM DEBIT CARD</h3>
         <h2>•••• •••• •••• 8842</h2>
-        <p style="text-align: right; font-size: 18px; margin: 0;"><b>Balance: ${st.session_state.atm_balance:,.2f}</b></p>
+        <p style="text-align: right; font-size: 18px; margin: 0;"><b>Balance: ${account.balance:,.2f}</b></p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -281,7 +273,7 @@ elif choice == "🏧 ATM Terminal":
         st.subheader("🔒 PIN Authentication Required")
         input_pin = st.text_input("Enter 4-Digit Security PIN", type="password")
         if st.button("Unlock Account", type="primary"):
-            if input_pin == st.session_state.atm_pin:
+            if account.verify_pin(input_pin):
                 st.session_state.atm_authenticated = True
                 st.success("Access Granted!")
                 st.rerun()
@@ -295,25 +287,29 @@ elif choice == "🏧 ATM Terminal":
         with tab1:
             dep_amt = st.number_input("Deposit Amount ($)", min_value=1.0, step=50.0)
             if st.button("Confirm Deposit", type="primary"):
-                st.session_state.atm_balance += dep_amt
-                st.session_state.atm_history.append(f"Deposit: +${dep_amt:,.2f}")
-                st.success(f"Deposited ${dep_amt:,.2f} successfully!")
+                success, message = account.deposit(dep_amt)
+                if success:
+                    st.success(message)
+                else:
+                    st.error(message)
                 st.rerun()
 
         with tab2:
-            wth_amt = st.number_input("Withdrawal Amount ($)", min_value=1.0, max_value=float(st.session_state.atm_balance), step=50.0)
+            wth_amt = st.number_input("Withdrawal Amount ($)", min_value=1.0, max_value=float(account.balance), step=50.0)
             if st.button("Confirm Withdrawal", type="primary"):
-                st.session_state.atm_balance -= wth_amt
-                st.session_state.atm_history.append(f"Withdrawal: -${wth_amt:,.2f}")
-                st.success(f"Withdrew ${wth_amt:,.2f} successfully!")
+                success, message = account.withdraw(wth_amt)
+                if success:
+                    st.success(message)
+                else:
+                    st.error(message)
                 st.rerun()
 
         with tab3:
             st.subheader("Transaction History")
-            if not st.session_state.atm_history:
+            if not account.transactions:
                 st.info("No recent transactions.")
             else:
-                for entry in st.session_state.atm_history:
+                for entry in account.transactions:
                     st.write(f"• {entry}")
 
         if st.button("Lock ATM Session"):
